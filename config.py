@@ -1,4 +1,4 @@
-"""Application configuration — loads settings from environment variables."""
+"""Application configuration — reads from st.secrets (Streamlit Cloud) or .env (local)."""
 
 import os
 from dotenv import load_dotenv
@@ -6,21 +6,29 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def _get(key: str, default: str = "") -> str:
+    """Return value from st.secrets if running on Streamlit Cloud, else from env."""
+    try:
+        import streamlit as st
+        return st.secrets.get(key, os.getenv(key, default))
+    except Exception:
+        return os.getenv(key, default)
+
+
 class Config:
     # Google Cloud Storage
-    GCS_BUCKET_NAME: str = os.getenv("GCS_BUCKET_NAME", "")
-    GOOGLE_APPLICATION_CREDENTIALS: str = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "")
+    GCS_BUCKET_NAME: str = _get("GCS_BUCKET_NAME")
+    GOOGLE_APPLICATION_CREDENTIALS: str = _get("GOOGLE_APPLICATION_CREDENTIALS")
 
     # Groq
-    GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
+    GROQ_API_KEY: str = _get("GROQ_API_KEY")
 
     # Zilliz Cloud (managed Milvus)
-    ZILLIZ_CLOUD_URI: str = os.getenv("ZILLIZ_CLOUD_URI", "")   # e.g. https://xxx.zillizcloud.com
-    ZILLIZ_CLOUD_TOKEN: str = os.getenv("ZILLIZ_CLOUD_TOKEN", "")  # API key / token
-    ZILLIZ_COLLECTION_NAME: str = os.getenv("ZILLIZ_COLLECTION_NAME", "rag_documents")
+    ZILLIZ_CLOUD_URI: str = _get("ZILLIZ_CLOUD_URI")
+    ZILLIZ_CLOUD_TOKEN: str = _get("ZILLIZ_CLOUD_TOKEN")
+    ZILLIZ_COLLECTION_NAME: str = _get("ZILLIZ_COLLECTION_NAME", "rag_documents")
 
     # Embedding model (runs locally, no API key needed)
-    # Produces 384-dim vectors — matches the default Zilliz collection schema below
     EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
     EMBEDDING_DIM: int = 384
 
@@ -28,16 +36,15 @@ class Config:
     LLM_MODEL: str = "llama-3.3-70b-versatile"
 
     # Document processing
-    CHUNK_SIZE: int = int(os.getenv("CHUNK_SIZE", "1000"))
-    CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "200"))
+    CHUNK_SIZE: int = int(_get("CHUNK_SIZE", "1000"))
+    CHUNK_OVERLAP: int = int(_get("CHUNK_OVERLAP", "200"))
 
     # Retrieval
-    TOP_K_RESULTS: int = int(os.getenv("TOP_K_RESULTS", "5"))
-    # Cosine similarity threshold: scores >= this value are considered relevant (range 0–1)
-    RELEVANCE_THRESHOLD: float = float(os.getenv("RELEVANCE_THRESHOLD", "0.4"))
+    TOP_K_RESULTS: int = int(_get("TOP_K_RESULTS", "5"))
+    RELEVANCE_THRESHOLD: float = float(_get("RELEVANCE_THRESHOLD", "0.4"))
 
     # UI
-    MAX_DOCUMENTS_DISPLAY: int = int(os.getenv("MAX_DOCUMENTS_DISPLAY", "10"))
+    MAX_DOCUMENTS_DISPLAY: int = int(_get("MAX_DOCUMENTS_DISPLAY", "10"))
 
     # Supported file types
     SUPPORTED_EXTENSIONS: list[str] = [".pdf", ".txt", ".docx", ".md", ".csv", ".xlsx"]

@@ -16,6 +16,41 @@ from config import Config
 logger = logging.getLogger(__name__)
 
 
+def _build_gcs_client() -> storage.Client:
+    """
+    Build a GCS client that works both locally (JSON key file) and on
+    Streamlit Cloud (service account JSON stored as a secret).
+    """
+    import json
+    import google.auth
+    from google.oauth2 import service_account
+
+    # Streamlit Cloud: secret stored as JSON string under key "GCS_SERVICE_ACCOUNT"
+    try:
+        import streamlit as st
+        sa_info = st.secrets.get("GCS_SERVICE_ACCOUNT")
+        if sa_info:
+            if isinstance(sa_info, str):
+                sa_info = json.loads(sa_info)
+            creds = service_account.Credentials.from_service_account_info(
+                sa_info,
+                scopes=["https://www.googleapis.com/auth/cloud-platform"],
+            )
+            return storage.Client(credentials=creds, project=sa_info.get("project_id"))
+    except Exception:
+        pass
+
+    # Local: use GOOGLE_APPLICATION_CREDENTIALS env var or ADC
+    if Config.GOOGLE_APPLICATION_CREDENTIALS:
+        creds = service_account.Credentials.from_service_account_file(
+            Config.GOOGLE_APPLICATION_CREDENTIALS,
+            scopes=["https://www.googleapis.com/auth/cloud-platform"],
+        )
+        return storage.Client(credentials=creds)
+
+    return storage.Client()  # falls back to Application Default Credentials
+
+
 class GCSHandler:
     """Handles all interactions with Google Cloud Storage."""
 
@@ -26,7 +61,7 @@ class GCSHandler:
     @property
     def client(self) -> storage.Client:
         if self._client is None:
-            self._client = storage.Client()
+            self._client = _build_gcs_client()
         return self._client
 
     @property
