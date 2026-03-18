@@ -18,17 +18,23 @@ logger = logging.getLogger(__name__)
 # Chunks with score >= RELEVANCE_THRESHOLD are used; the rest trigger web fallback.
 _RELEVANCE_THRESHOLD = Config.RELEVANCE_THRESHOLD
 
-_SYSTEM_PROMPT = """You are a helpful, knowledgeable assistant that answers questions based on \
-provided document excerpts. Follow these rules:
+_SYSTEM_PROMPT = """You are a helpful, knowledgeable assistant. Answer questions using the \
+following priority order:
 
-1. If the answer can be found in the provided document excerpts, answer using ONLY that \
-information and cite the source document(s).
-2. If the document excerpts are insufficient, clearly state that and use the web search results \
-provided to supplement your answer.
-3. If neither source has enough information, honestly say you do not know.
-4. Keep answers concise, factual, and well-structured.
-5. Use markdown formatting for readability (bullet points, bold, code blocks as needed).
-6. Never fabricate facts or sources."""
+1. **Document excerpts** (if provided and relevant) — answer from these first and cite the source.
+2. **Web search results** (if provided) — use these to give an up-to-date, factual answer. \
+Always summarise the key points clearly.
+3. **Your own training knowledge** — if neither documents nor web results are available or \
+sufficient, answer from your own knowledge. Clearly state: "Based on my knowledge:" before \
+the answer so the user knows it is not from their documents or a live search.
+
+Rules:
+- ALWAYS attempt to answer. Never say "I do not know" if you have any relevant knowledge.
+- Keep answers concise, factual, and well-structured.
+- Use markdown: bullet points, bold headings, tables where helpful.
+- If answering from web results, mention the sources briefly.
+- Never fabricate specific numbers, dates, or legal figures — if uncertain, say so and \
+recommend the user verify with an official source."""
 
 
 @dataclass
@@ -96,14 +102,23 @@ class RAGAgent:
             web_context = self._format_web_context(web_results)
             context_parts.append(f"**Web search results:**\n{web_context}")
 
-        context = "\n\n".join(context_parts) if context_parts else "No context available."
+        has_context = bool(context_parts)
+        context = "\n\n".join(context_parts) if context_parts else ""
 
-        # --- Step 4: call Claude -------------------------------------
-        user_message = (
-            f"Context:\n{context}\n\n"
-            f"Question: {question}\n\n"
-            "Please answer the question based on the context above."
-        )
+        # --- Step 4: call Groq ---------------------------------------
+        if has_context:
+            user_message = (
+                f"Context:\n{context}\n\n"
+                f"Question: {question}\n\n"
+                "Answer the question using the context above. If the context is insufficient, "
+                "supplement with your own knowledge and say so."
+            )
+        else:
+            user_message = (
+                f"Question: {question}\n\n"
+                "No documents or web results are available for this question. "
+                "Answer from your own knowledge and prefix with 'Based on my knowledge:'"
+            )
 
         messages = [*history, {"role": "user", "content": user_message}]
 
